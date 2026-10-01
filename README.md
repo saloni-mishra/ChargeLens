@@ -1,24 +1,16 @@
 # StatementIQ
 
-### Privacy-first bank statement analyzer for recurring charges and price checks
+**Privacy-first bank statement analyzer for recurring charges and price checks.**
 
-StatementIQ is a privacy-first bank statement analyzer built for the **SerpApi India Hackathon 2026**.
+StatementIQ parses bank statements (CSV, structured PDF, or OCR fallback for scanned PDFs) entirely on-device, detects recurring charges, identifies the underlying subscription service, and checks current public pricing through SerpApi — sending only a canonical service name, never raw statement data. Gemini proposes structured price candidates from search results, but a deterministic Python validator makes the final decision about what the user sees, and shows `UNAVAILABLE` rather than guessing when evidence is insufficient.
 
-It helps users understand recurring expenses in their bank statements and compare subscription prices with currently listed public prices in India.
+> Built for the **SerpApi India Hackathon 2026**. Track: **Commerce & Market Intelligence**.
 
 The key design goal is simple:
 
-> **Keep private financial data local. Use the web only for public pricing information.**
-
-StatementIQ processes bank statement data locally, detects recurring merchants, resolves canonical merchant identities, and only sends the canonical service name to SerpApi when an external price lookup is needed.
-
-Gemini can propose structured price information from search results, but a deterministic Python validator makes the final decision about what is shown to the user.
-
----
+> Keep private financial data local. Use the web only for public pricing information.
 
 ## 🚀 What StatementIQ Does
-
-StatementIQ can:
 
 - Parse CSV bank statements
 - Parse structured/text-based PDF statements
@@ -35,15 +27,11 @@ StatementIQ can:
 - Cache search results to avoid unnecessary API calls
 - Keep sensitive transaction information out of external search requests
 
----
-
 ## 🔐 Privacy-First Architecture
 
 StatementIQ is designed around a strict privacy boundary.
 
 ### What stays local
-
-The following information is processed locally:
 
 - Transaction dates
 - Transaction amounts
@@ -57,32 +45,15 @@ The following information is processed locally:
 
 ### What can leave the application
 
-Only a **canonical merchant/service name** is sent to SerpApi.
+Only a canonical merchant/service name is sent to SerpApi. For example: `Netflix`, `Spotify`, `YouTube Premium`.
 
-For example:
+StatementIQ does **not** send `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, or `2026-04-05, ₹649, UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, to the external search service. The external search query is based solely on the canonical service identity and public pricing intent.
 
-```text
-Netflix
-Spotify
-YouTube Premium
-
-StatementIQ does not send:
-
-UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
-
-or:
-
-2026-04-05, ₹649, UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
-
-to the external search service.
-
-The external search query is based on the canonical service identity and public pricing intent.
-
-🧠 AI Safety Boundary
+## 🧠 AI Safety Boundary
 
 StatementIQ uses Gemini as a proposal/extraction layer, not as the final decision-maker.
 
-The flow is:
+```
 Bank Statement
       │
       ▼
@@ -113,242 +84,183 @@ Deterministic Python Validator
       │
       ▼
 User-visible Result
+```
 
-Gemini may propose:
+Gemini may propose something like:
 
+```
 Plan: Premium
 Price: ₹299/month
 Currency: INR
 Cadence: monthly
 Eligibility: student
+```
 
-But Gemini cannot directly decide that the result is valid.
+But Gemini cannot directly decide that the result is valid. Before a proposal ever reaches the validator, each proposed price is **grounded against the raw search snippets** — any price the model proposes that doesn't literally appear in the source text is discarded, so the LLM can propose but can never fabricate.
 
-The Python validator checks:
+The Python validator then checks:
 
-Price validity
-Currency
-Billing cadence
-Plan matching
-Eligibility restrictions
-Required fields
-Search/evidence availability
+- Price validity
+- Currency
+- Billing cadence
+- Plan matching
+- Eligibility restrictions
+- Required fields
+- Search/evidence availability
 
-If the data cannot be safely validated, StatementIQ shows:
-UNAVAILABLE
-rather than guessing.
-📄 Statement Input
+If the data cannot be safely validated, StatementIQ shows `UNAVAILABLE` rather than guessing.
+
+## 📄 Statement Input
 
 StatementIQ supports three input paths.
 
-CSV
+**CSV** — files must provide these canonical fields: `date`, `amount`, `currency`, `raw_description`.
 
-CSV files must provide the following canonical fields:
+**Structured PDF** — StatementIQ first attempts to extract transaction tables from PDFs using `pdfplumber`.
 
-date
-amount
-currency
-raw_description
-Structured PDF
+**Image-based PDF / OCR** — if no transaction table can be extracted, StatementIQ falls back to:
 
-StatementIQ first attempts to extract transaction tables from PDFs using pdfplumber.
-
-Image-based PDF / OCR
-
-If no transaction table can be extracted, StatementIQ falls back to:
-
-PDF
- ↓
-PyMuPDF rendering
- ↓
-Tesseract OCR
- ↓
-OCR transaction parsing
- ↓
-Canonical transaction DataFrame
+```
+PDF → PyMuPDF rendering → Tesseract OCR → OCR transaction parsing → Canonical transaction DataFrame
+```
 
 OCR accuracy can vary depending on the layout and quality of the bank statement.
 
-For Windows, the Tesseract OCR engine must be installed separately. The Python package pytesseract provides the Python interface to Tesseract.
+## 🔎 Recurring Charge Detection
 
-🔎 Recurring Charge Detection
+Recurring transactions are detected locally, before any external search is considered. For example:
 
-Recurring transactions are detected locally.
+```
+Netflix   ₹649   Apr
+Netflix   ₹649   May
+Netflix   ₹649   Jun
+```
 
-StatementIQ looks for repeated merchant activity and recurring payment patterns before considering any external search.
+is identified as a recurring charge based on interval regularity and amount stability, not just a repeated name.
 
-Example:
+## 🌐 SerpApi Integration
 
-Netflix       ₹649   Apr
-Netflix       ₹649   May
-Netflix       ₹649   Jun
+StatementIQ uses SerpApi to retrieve current public search results via Google Search, with India-focused parameters (`gl=in`, `hl=en`). Example search intent:
 
-can be identified as a recurring charge.
-
-The application can then investigate whether the merchant corresponds to a known subscription/service.
-
-🌐 SerpApi Integration
-
-StatementIQ uses SerpApi to retrieve current public search results.
-
-The current search flow uses Google Search through SerpApi with India-focused parameters.
-
-Example search intent:
-
+```
 "<service> subscription plans India monthly price official"
+```
 
 The application does not send raw transaction descriptions to SerpApi.
 
-Search controls
-
-StatementIQ uses:
-
-Disk caching
-Search budget limits
-Budget reserve for demonstrations
-Cache freshness controls
-Search throttling
-Audit information
+**Search controls:**
+- Disk caching
+- Search budget limits
+- Budget reserve for demonstrations
+- Cache freshness controls
+- Search throttling
+- Audit information
 
 This prevents every transaction from automatically triggering a paid external search.
 
-💰 SerpApi Budget Protection
+## 💰 SerpApi Budget Protection
 
-The application uses a configurable search budget.
-
-Example:
-
+```
 SERPAPI_TOTAL_BUDGET=250
 SERPAPI_DEMO_RESERVE=50
+```
 
-The application checks cache and budget availability before making a SerpApi request.
+The application checks cache and budget availability before making a SerpApi request. If a search cannot be performed because of the budget, the UI reports `SEARCH_THROTTLED` rather than silently skipping or retrying.
 
-If a search cannot be performed because of the budget, the UI reports:
+## ♻️ Replay Mode
 
-SEARCH_THROTTLED
+For deterministic demos and development, StatementIQ supports replay mode:
 
-rather than silently making an additional API request.
+```
+STATEMENTIQ_REPLAY=1   # reuse previously captured search responses
+STATEMENTIQ_REPLAY=0   # normal operation — live SerpApi calls
+```
 
-♻️ Replay Mode
+## 🛡️ Validation States
 
-For deterministic demos and development, StatementIQ supports replay mode.
+StatementIQ does not force a price comparison when evidence is insufficient. Validation states include:
 
-STATEMENTIQ_REPLAY=0
+- `MATCHES_LISTED_PLAN`
+- `NO_LISTED_MATCH`
+- `NO_PRICE_FOUND`
+- `GATE_MISMATCH`
+- `IDENTITY_UNVERIFIED`
+- `SEARCH_THROTTLED`
 
-Normal operation:
+For example, if a merchant cannot be confidently identified locally, StatementIQ returns `IDENTITY_UNVERIFIED` and **no external search is made** — protecting both privacy and the SerpApi budget.
 
-STATEMENTIQ_REPLAY=0
+## 📊 Example
 
-Replay/demo operation can use:
+A recurring statement entry containing `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm` is locally resolved to `Netflix`. StatementIQ then searches public pricing for `"Netflix subscription plans India monthly price official"` — the original transaction description is never sent to SerpApi.
 
-STATEMENTIQ_REPLAY=1
+The dashboard shows results like:
 
-Replay mode allows previously captured search responses to be reused instead of repeatedly calling the external search API.
+```
+Netflix — ₹649/month — Confidence: MEDIUM
+Nearest listed plan: Basic — ₹199/month
+Your charge does not match any current listed price
+```
 
-🛡️ Validation States
+If a valid price cannot be established, StatementIQ instead displays `UNAVAILABLE` with the specific reason (e.g. identity unverified, no price found, or search throttled).
 
-StatementIQ does not force a price comparison when evidence is insufficient.
+## 🏗️ Architecture
 
-Examples of validation states include:
-
-MATCHES_LISTED_PLAN
-NO_LISTED_MATCH
-NO_PRICE_FOUND
-GATE_MISMATCH
-IDENTITY_UNVERIFIED
-SEARCH_THROTTLED
-
-For example, if a merchant cannot be confidently identified locally:
-
-IDENTITY_UNVERIFIED
-
-No external search is made.
-
-This protects both privacy and the SerpApi budget.
-
-📊 Example
-
-A recurring statement entry might contain:
-
-UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
-
-StatementIQ can locally resolve this to:
-
-Netflix
-
-The application can then search public pricing information for:
-
-Netflix subscription plans India monthly price official
-
-The user's original transaction description is not sent to SerpApi.
-
-The resulting dashboard can show information such as:
-
-Netflix
-₹649/month
-
-Confidence: MEDIUM
-
-Nearest listed plan:
-Basic — ₹199/month
-
-Potential price difference:
-₹450/month
-
-If a valid price cannot be established, StatementIQ instead displays:
-
-UNAVAILABLE
-🏗️ Architecture
+```
                     ┌──────────────────────┐
-                    │   Bank Statement     │
+                    │   Bank Statement      │
                     │   CSV / PDF / OCR     │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │   Local Parser       │
-                    │ CSV / PDF / OCR      │
+                    │   Local Parser        │
+                    │ CSV / PDF / OCR       │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │ Merchant Normalizer  │
+                    │ Merchant Normalizer   │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │ Recurring Detector   │
+                    │ Recurring Detector    │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │ Canonical Service    │
-                    │ Identity             │
+                    │ Canonical Service     │
+                    │ Identity              │
                     └──────────┬───────────┘
                                │
-                     Searchable?
-                       /       \
-                     No         Yes
-                     │           │
-                     ▼           ▼
-               UNVERIFIED   Cache / Budget
-                                 │
-                                 ▼
-                             SerpApi
-                                 │
-                                 ▼
-                         Search Results
-                                 │
-                                 ▼
-                             Gemini
-                        Price Proposal Only
-                                 │
-                                 ▼
-                    Deterministic Validator
-                                 │
-                                 ▼
-                         Dashboard Result
-🧩 Project Structure
+                       Searchable?
+                        /        \
+                      No          Yes
+                      │            │
+                      ▼            ▼
+               IDENTITY_      Cache / Budget
+               UNVERIFIED          │
+                                   ▼
+                               SerpApi
+                                   │
+                                   ▼
+                           Search Results
+                                   │
+                                   ▼
+                               Gemini
+                        (Price Proposal Only —
+                         grounded against source text)
+                                   │
+                                   ▼
+                      Deterministic Validator
+                                   │
+                                   ▼
+                           Dashboard Result
+```
+
+## 🧩 Project Structure
+
+```
 StatementIQ/
 │
 ├── app.py
@@ -374,70 +286,70 @@ StatementIQ/
 │   │
 │   ├── test_parser_csv.py
 │   ├── test_parser_pdf.py
-│   └── test_ocr_fallback.py
+│   ├── test_ocr_fallback.py
+│   └── test_privacy.py      # asserts SerpApi queries contain no amounts, dates, or raw statement text
 │
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
 └── README.md
-⚙️ Tech Stack
-Backend
-Python
-FastAPI
-Uvicorn
-Pandas
-NumPy
-Statement Processing
-pdfplumber
-PyMuPDF
-pytesseract
-Pillow
-AI
-Google Gemini
-Search
-SerpApi
-Google Search
-Frontend
-HTML
-CSS
-JavaScript
-Testing
-Pytest
-🛠️ Setup
-1. Clone the repository
+```
+
+## ⚙️ Tech Stack
+
+**Backend:** Python, FastAPI, Uvicorn, Pandas, NumPy
+**Statement Processing:** pdfplumber, PyMuPDF, pytesseract, Pillow
+**AI:** Google Gemini (`gemini-2.5-flash`) — structured extraction only, output grounded against source text, final decision made deterministically
+**Search:** SerpApi (Google Search engine)
+**Frontend:** HTML, CSS, JavaScript
+**Testing:** Pytest
+
+## 🛠️ Setup
+
+### 1. Clone the repository
+
+```bash
 git clone <your-public-github-repository>
 cd StatementIQ
-2. Create a virtual environment
+```
 
-Windows:
+### 2. Create a virtual environment
 
+**Windows:**
+```bash
 py -3.12 -m venv .venv
-
-Activate it:
-
 .venv\Scripts\Activate.ps1
-3. Install Python dependencies
+```
+
+**macOS / Linux:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
 python -m pip install -r requirements.txt
-🧾 OCR Setup on Windows
+```
 
-StatementIQ uses Tesseract for OCR fallback.
+## 🧾 OCR Setup
 
-Install the Tesseract OCR engine separately.
+StatementIQ uses Tesseract for OCR fallback. Install the Tesseract OCR engine separately for your platform, then verify with:
 
-After installation, verify:
-
+```bash
 tesseract --version
+```
 
-StatementIQ currently uses the standard Windows installation path:
+**Windows** default path: `C:\Program Files\Tesseract-OCR\tesseract.exe` — update the path in the parser configuration if your installation differs.
+**macOS:** `brew install tesseract`
+**Linux (Debian/Ubuntu):** `sudo apt install tesseract-ocr`
 
-C:\Program Files\Tesseract-OCR\tesseract.exe
+## 🔑 Environment Variables
 
-If your installation uses another location, update the Tesseract path in the parser configuration.
+Create a local `.env` file (never commit this):
 
-🔑 Environment Variables
-
-Create a local .env file:
-
+```
 SERPAPI_KEY=your_serpapi_key
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.5-flash
@@ -447,156 +359,60 @@ SERPAPI_DEMO_RESERVE=50
 
 STATEMENTIQ_REPLAY=0
 STATEMENTIQ_DEMO=0
+```
 
-Never commit your real .env file.
+Use `.env.example` (with empty values) for the public repository.
 
-Use .env.example for the public repository.
+## ▶️ Run the Application
 
-Example:
-
-SERPAPI_KEY=
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
-
-SERPAPI_TOTAL_BUDGET=250
-SERPAPI_DEMO_RESERVE=50
-
-STATEMENTIQ_REPLAY=0
-STATEMENTIQ_DEMO=0
-▶️ Run the Application
-
-Start the FastAPI application:
-
+```bash
 python -m uvicorn app:app --reload
+```
 
 Then open the local dashboard in your browser.
 
-🧪 Run Tests
+## 🧪 Run Tests
 
-Run the complete test suite:
-
+```bash
 python -m pytest -q
+```
 
-Current parser coverage includes:
+Current test coverage includes CSV parsing, PDF table parsing, PDF OCR fallback, and an automated privacy check confirming no financial data reaches the external search query.
 
-CSV parsing
-PDF table parsing
-PDF OCR fallback
+## 🔒 Security and Privacy Notes
 
-The project currently has:
+The following should never be included in external search requests: account numbers, card numbers, transaction amounts, transaction dates, raw bank descriptions, UPI IDs, personal identifiers. Only the canonical service identity is used for external pricing searches.
 
-4 passed
-🔒 Security and Privacy Notes
+Users should also avoid committing: `.env`, `statementiq.db`, personal bank statements, OCR output containing private information, or SerpApi replay data containing sensitive information.
 
-StatementIQ is designed to minimize external exposure of financial information.
+## ⚠️ Limitations
 
-The following should never be included in external search requests:
+StatementIQ is a hackathon prototype with several known limitations:
 
-Account numbers
-Card numbers
-Transaction amounts
-Transaction dates
-Raw bank descriptions
-UPI IDs
-Personal identifiers
+**Merchant identification** — some merchants may not be confidently identifiable from a transaction description. These are marked `IDENTITY_UNVERIFIED` rather than guessed.
 
-Only the canonical service identity should be used for external pricing searches.
+**OCR** — accuracy depends on PDF resolution, scan quality, fonts, and table layout. The current OCR parser targets common transaction layouts and is not guaranteed to support every bank statement format.
 
-Users should also avoid committing:
+**Public pricing** — prices can change, and search results may reflect regional restrictions, promotional pricing, student/family plans, or annual plans. StatementIQ uses validation gates before presenting any comparison rather than assuming pricing is current or applicable.
 
-.env
-statementiq.db
-personal bank statements
-OCR output containing private information
-SerpApi replay data containing sensitive information
-⚠️ Limitations
+**Search availability** — SerpApi searches are budget-controlled. If the budget is unavailable, the result is `SEARCH_THROTTLED`.
 
-StatementIQ is a hackathon prototype and has several limitations.
+**Detection scope** — only monthly-cadence recurring charges are reliably detected from a single statement period; annual subscriptions appearing once per year may not be identified.
 
-Merchant identification
+## 🤖 AI Usage
 
-Some merchants may not be confidently identifiable from a transaction description.
+StatementIQ uses **Google Gemini (`gemini-2.5-flash`)** for structured information extraction from public search results. Gemini is intentionally restricted to a proposal role: its output is grounded against the raw search text before use, and the final displayed result is determined entirely by deterministic Python validation logic, not the model.
 
-These are marked:
+During development, **Gemini** and **Chatgpt** were used for implementation assistance, debugging, documentation, and code review.
 
-IDENTITY_UNVERIFIED
+## 🏆 Hackathon Context
 
-rather than guessed.
+Built for the **SerpApi India Hackathon 2026**, Commerce & Market Intelligence track. The project demonstrates a privacy-conscious workflow where private financial data stays local, only a canonical service identity reaches the public web, and every user-facing claim passes through deterministic validation before display — never an AI guess alone.
 
-OCR
+## 📜 License
 
-OCR quality depends on:
+This project is released under the MIT License. See `LICENSE` for the full license text.
 
-PDF resolution
-scan quality
-fonts
-table layout
-column arrangement
-OCR recognition accuracy
-
-The current OCR parser is designed around common transaction layouts and is not guaranteed to support every bank statement format.
-
-Public pricing
-
-Public subscription prices can change.
-
-Search results may also contain:
-
-regional restrictions
-promotional pricing
-student plans
-family plans
-annual plans
-eligibility requirements
-
-StatementIQ therefore uses validation gates before presenting a comparison.
-
-Search availability
-
-SerpApi searches are budget-controlled.
-
-If the search budget is unavailable, the result can be:
-
-SEARCH_THROTTLED
-🤖 AI Usage
-
-StatementIQ uses Gemini for structured information extraction from public search results.
-
-Gemini is intentionally restricted to a proposal role.
-
-The final displayed result is determined by deterministic Python validation logic.
-
-AI assistance was also used during development for implementation, debugging, documentation, and code review.
-
-🏆 Hackathon Context
+## 👤 Author
 
 Built for the SerpApi India Hackathon 2026.
-
-The project demonstrates a privacy-conscious workflow where:
-
-Private financial data
-        ↓
-Local processing
-        ↓
-Canonical service identity
-        ↓
-Public web search
-        ↓
-Structured extraction
-        ↓
-Deterministic validation
-        ↓
-Actionable dashboard
-
-The goal is to combine local financial-data processing with current public web information without unnecessarily exposing sensitive transaction data.
-
-📜 License
-
-This project is released under the MIT License.
-
-See LICENSE for the full license text.
-
-👤 Author
-
-Built for the SerpApi India Hackathon 2026.
-
