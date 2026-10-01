@@ -9,6 +9,7 @@ class Plan(BaseModel):
     price: float
     currency: str
     billing_period: Literal["monthly", "annual", "quarterly"]
+    eligibility: str | None = None
 
 class ExtractedPricing(BaseModel):
     plans: List[Plan]
@@ -17,11 +18,17 @@ class ExtractedPricing(BaseModel):
 PRICE_RE = re.compile(r"(₹|Rs\.?|INR)\s?\d", re.I)
 MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 PROMPT = """Extract current subscription plan prices for {service} in India from these search snippets.
+
 Use ONLY prices explicitly written in the snippets. Never guess. Skip anything unclear.
+
 Return every distinct plan: tier name, price, ISO currency, billing_period (monthly/annual/quarterly).
+
+If a plan has eligibility restrictions such as student, senior, military, family, education, or similar, include the restriction in eligibility. Otherwise use null.
+
 Set extraction_confidence to "high" only if at least one plan price is stated clearly.
 
 Snippets:
+
 {snippets}"""
 
 _client = None

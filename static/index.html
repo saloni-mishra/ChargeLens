@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>StatementIQ — Evidence-Backed Recurring Charge Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #131b2e;
+      --border: #232f48;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --gray: #64748b;
+      --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); margin: 0; padding: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }
+    .title h1 { margin: 0; font-size: 24px; }
+    .title p { margin: 4px 0 0; color: var(--text-muted); font-size: 14px; }
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .badge-meter { background: var(--card-bg); border: 1px solid var(--border); padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500; }
+    .privacy-tag { font-size: 11px; color: var(--green); display: flex; align-items: center; gap: 4px; }
+    
+    .upload-box {
+      border: 2px dashed var(--border); border-radius: 12px; padding: 28px; text-align: center;
+      background: rgba(19, 27, 46, 0.5); cursor: pointer; transition: all 0.2s; margin-bottom: 24px;
+    }
+    .upload-box:hover { border-color: var(--blue); background: rgba(19, 27, 46, 0.8); }
+    .upload-box input { display: none; }
+
+    /* Summary Metrics Bar */
+    .summary-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .metric-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .metric-title { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-value { font-size: 24px; font-weight: 700; margin-top: 6px; }
+    .metric-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Loading Pipeline Card */
+    .loading-container {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px;
+      max-width: 520px; margin: 0 auto; text-align: left;
+    }
+    .loading-step { display: flex; align-items: center; gap: 12px; margin: 12px 0; font-size: 14px; color: var(--text-muted); }
+    .loading-step.active { color: var(--text); font-weight: 600; }
+    .loading-step.done { color: var(--green); }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Grid & Cards */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
+    .card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+    .merchant { font-size: 18px; font-weight: 600; }
+    .tag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
+    .tag-HIGH { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid var(--green); }
+    .tag-MEDIUM { background: rgba(245, 158, 11, 0.15); color: var(--yellow); border: 1px solid var(--yellow); }
+    .tag-UNAVAILABLE { background: rgba(100, 116, 139, 0.15); color: var(--gray); border: 1px solid var(--gray); }
+    
+    .amount { font-size: 26px; font-weight: 700; margin: 8px 0; }
+    .detail { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px; }
+    .view-btn {
+      width: 100%; padding: 9px; background: transparent; border: 1px solid var(--border);
+      color: var(--text); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+      transition: background 0.15s;
+    }
+    .view-btn:hover { background: var(--border); }
+    
+    /* Sliding Drawer */
+    .drawer-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); display: none; z-index: 100; backdrop-filter: blur(2px); }
+    .drawer {
+      position: fixed; right: -480px; top: 0; bottom: 0; width: 440px; background: var(--card-bg);
+      border-left: 1px solid var(--border); padding: 28px; z-index: 101; transition: right 0.25s ease-out;
+      overflow-y: auto;
+    }
+    .drawer.open { right: 0; }
+    .drawer-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+    .drawer-section { margin-top: 20px; }
+    .drawer-section h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+    .drawer-row { display: flex; justify-content: space-between; font-size: 13px; padding: 7px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+    .drawer-row span:last-child { font-weight: 600; }
+    .check-pass { color: var(--green); }
+    .check-fail { color: var(--yellow); }
+    .source-box { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.4; color: var(--text-muted); word-break: break-all; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">
+      <h1>StatementIQ</h1>
+      <p>Privacy-first recurring charge discovery & market evidence validation</p>
+    </div>
+    <div class="header-right">
+      <div class="badge-meter" id="budgetMeter">SerpApi Budget: Syncing...</div>
+      <div class="privacy-tag">🔒 Zero statement text or amounts leave this device</div>
+    </div>
+  </div>
+
+  <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+    <input type="file" id="fileInput" accept=".csv" onchange="uploadStatement(event)">
+    <div style="font-size: 32px; margin-bottom: 6px;">📄</div>
+    <div style="font-weight: 600; font-size: 16px;">Drop bank_statement.csv here, or click to upload</div>
+    <div style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+      Statements are parsed and filtered locally. Only confirmed service names are queried for market pricing.
+    </div>
+  </div>
+
+  <!-- Summary Metrics Bar (Hidden until results are loaded) -->
+  <div id="metricsBar" class="summary-metrics" style="display: none;"></div>
+
+  <!-- Main Card Grid or Loading State -->
+  <div class="grid" id="resultsGrid"></div>
+
+  <!-- Evidence Drawer Component -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+  <div class="drawer" id="evidenceDrawer">
+    <div class="drawer-header">
+      <h3 style="margin:0;" id="drawerTitle">Evidence Inspection</h3>
+      <button onclick="closeDrawer()" style="background:none; border:none; color:var(--text); font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+    <div id="drawerContent"></div>
+  </div>
+
+  <script>
+    let currentData = [];
+
+    // Currency Formatter
+    function fmtMoney(amount, currency) {
+      if (amount === null || amount === undefined) return 'N/A';
+      const symbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£', CAD: 'C$', AUD: 'A$' };
+      const sym = symbols[currency] || (currency ? currency + ' ' : '');
+      return `${sym}${Number(amount).toLocaleString()}`;
+    }
+
+    // XSS Sanitizer
+    function sanitize(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function loadBudget() {
+      try {
+        const res = await fetch('/api/budget');
+        const data = await res.json();
+        document.getElementById('budgetMeter').innerText = 
+          `SerpApi Used: ${data.used} / ${data.total} | Reserve: ${data.demo_reserve}`;
+      } catch (e) {
+        document.getElementById('budgetMeter').innerText = 'Local Offline Mode';
+      }
+    }
+    loadBudget();
+
+    function renderLoadingStage() {
+      document.getElementById('metricsBar').style.display = 'none';
+      document.getElementById('resultsGrid').innerHTML = `
+        <div class="loading-container" style="grid-column: 1 / -1;">
+          <h3 style="margin: 0 0 16px;">Analyzing Statement</h3>
+          <div class="loading-step done">✓ 1. Parsing statement & cleaning transaction prefixes locally</div>
+          <div class="loading-step done">✓ 2. Evaluating interval regularity & amount stability</div>
+          <div class="loading-step active"><span class="spinner"></span> 3. Resolving canonical services & checking pricing cache</div>
+          <div class="loading-step"><span class="spinner"></span> 4. Running deterministic validation rules</div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px;">
+            Enforcing budget guard policy: external search is skipped for unresolved services.
+          </p>
+        </div>
+      `;
+    }
+
+    async function uploadStatement(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      renderLoadingStage();
+
+      try {
+        const res = await fetch("/api/analyze", { method: "POST", body: formData });
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        currentData = data.results || [];
+        renderMetrics(currentData);
+        renderCards(currentData);
+        loadBudget();
+      } catch (err) {
+        document.getElementById('metricsBar').style.display = 'none';
+        document.getElementById('resultsGrid').innerHTML = `
+          <div class="card" style="grid-column: 1 / -1; border-color: var(--yellow);">
+            <div class="merchant">Analysis Failed</div>
+            <div class="detail" style="margin-top: 8px;">
+              ${sanitize(err.message)}. Please check your CSV format (requires columns: <code>date, amount, currency, raw_description</code>) and verify your API keys.
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function renderMetrics(items) {
+  const bar = document.getElementById('metricsBar');
+  if (!items || items.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  const totalMonthlySpend = items.reduce((acc, it) => acc + (it.user_amount || 0), 0);
+  const highConfidenceItems = items.filter(it => it.report?.confidence_tier === 'HIGH');
+  const verifiedCount = highConfidenceItems.length;
+
+  // STRICT RULE: Only count verified HIGH confidence differences in headline savings
+  const confirmedSavings = highConfidenceItems.reduce((acc, it) => {
+    const diff = it.report?.potential_difference;
+    return acc + (diff && diff > 0 ? diff : 0);
+  }, 0);
+
+  // Check if there are unverified MEDIUM differences
+  const mediumDifferences = items
+    .filter(it => it.report?.confidence_tier === 'MEDIUM')
+    .reduce((acc, it) => {
+      const diff = it.report?.potential_difference;
+      return acc + (diff && diff > 0 ? diff : 0);
+    }, 0);
+
+  const currency = items[0]?.user_currency || 'INR';
+
+  // Dynamic status text for the 3rd stat card
+  let diffTitle = "Verified Price Difference";
+  let diffDisplay = fmtMoney(confirmedSavings, currency);
+  let diffColor = "inherit";
+  let diffSubtitle = "Based on confirmed plan matches";
+
+  if (confirmedSavings > 0) {
+    diffColor = "var(--green)";
+    diffSubtitle = "Identified against confirmed plan matches";
+  } else if (mediumDifferences > 0) {
+    diffTitle = "Unconfirmed Price Gap";
+    diffDisplay = fmtMoney(mediumDifferences, currency);
+    diffColor = "var(--yellow)";
+    diffSubtitle = "Plan unconfirmed; excluded from verified savings";
+  } else {
+    diffSubtitle = "No price differences identified";
+  }
+
+  bar.innerHTML = `
+    <div class="metric-card">
+      <div class="metric-title">Recurring Charges</div>
+      <div class="metric-value">${items.length}</div>
+      <div class="metric-subtitle">${verifiedCount} verified with public pricing</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-title">Monthly Recurring Spend</div>
+      <div class="metric-value">${fmtMoney(totalMonthlySpend, currency)}</div>
+      <div class="metric-subtitle">Across detected recurring charges</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-title">${diffTitle}</div>
+      <div class="metric-value" style="color: ${diffColor};">
+        ${diffDisplay}
+      </div>
+      <div class="metric-subtitle">${diffSubtitle}</div>
+    </div>
+  `;
+  bar.style.display = 'grid';
+}
+    function renderCards(items) {
+      const container = document.getElementById('resultsGrid');
+      container.innerHTML = '';
+
+      if (items.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1 / -1;">No recurring charges met the 70% stability confidence threshold.</p>';
+        return;
+      }
+
+      items.forEach((item, index) => {
+        const rep = item.report || {};
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div>
+            <div class="card-header">
+              <span class="merchant">${sanitize(item.merchant)}</span>
+              <span class="tag tag-${sanitize(rep.confidence_tier)}">${sanitize(rep.confidence_tier)}</span>
+            </div>
+            <div class="amount">
+              ${fmtMoney(item.user_amount, item.user_currency)} 
+              <span style="font-size:14px; font-weight:normal; color:var(--text-muted);">/ ${sanitize(item.cadence)}</span>
+            </div>
+            <div class="detail">${sanitize(rep.decision_reason)}</div>
+          </div>
+          <button class="view-btn" onclick="openDrawer(${index})">View Evidence</button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function openDrawer(index) {
+      const item = currentData[index];
+      const rep = item.report || {};
+      const content = document.getElementById('drawerContent');
+
+      // Helper to render gate status
+      function renderGate(checked, passed) {
+        if (!checked) return `<span style="color: var(--text-muted);">NOT CHECKED</span>`;
+        return passed 
+          ? `<span class="check-pass">✓ PASS</span>` 
+          : `<span class="check-fail">✗ MISMATCH</span>`;
+      }
+
+      let comparisonHtml = '';
+
+      if (rep.reason_code === 'IDENTITY_UNVERIFIED') {
+        comparisonHtml = `
+          <div class="drawer-section">
+            <h4>Market Comparison</h4>
+            <div style="background: rgba(100, 116, 139, 0.1); border: 1px dashed var(--border); padding: 12px; border-radius: 6px; font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+              <strong>Not attempted:</strong> Merchant identity could not be confirmed locally, so no external search was made (protects search budget).
+            </div>
+          </div>
+        `;
+      } else if (rep.reason_code === 'NO_PRICE_FOUND') {
+        comparisonHtml = `
+          <div class="drawer-section">
+            <h4>Market Comparison</h4>
+            <div style="background: rgba(100, 116, 139, 0.1); border: 1px dashed var(--border); padding: 12px; border-radius: 6px; font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+              <strong>Search Incomplete:</strong> Live search was conducted, but public pricing snippets could not be extracted with high confidence.
+            </div>
+          </div>
+        `;
+      } else {
+        // Standard comparison section when a check genuinely occurred
+        comparisonHtml = `
+          <div class="drawer-section">
+            <h4>Market Comparison Validation</h4>
+            <div class="drawer-row">
+              <span>Currency Gate</span>
+              ${renderGate(rep.currency_checked, rep.currency_match)}
+            </div>
+            <div class="drawer-row">
+              <span>Billing Cadence Gate</span>
+              ${renderGate(rep.cadence_checked, rep.cadence_match)}
+            </div>
+            <div class="drawer-row">
+              <span>Matched Listed Plan</span>
+              <span>${sanitize(rep.matched_plan) || 'None Confirmed'}</span>
+            </div>
+           ${rep.potential_difference !== null && rep.potential_difference !== undefined ? `
+  <div class="drawer-row">
+    <span>Price Comparison</span>
+    <span style="color: ${
+      Math.abs(rep.potential_difference) <= 0.01
+        ? 'var(--green)'
+        : rep.potential_difference > 0
+          ? 'var(--yellow)'
+          : 'var(--green)'
+    };">
+      ${
+        Math.abs(rep.potential_difference) <= 0.01
+          ? 'Your charge closely matches current pricing'
+          : rep.potential_difference > 0
+            ? `You pay ${fmtMoney(rep.potential_difference, item.user_currency)} more than the nearest listed plan`
+            : `You already pay ${fmtMoney(Math.abs(rep.potential_difference), item.user_currency)} less than the nearest listed plan`
+      }
+    </span>
+   </div>
+` : ''}
+`;
+      }
+
+      content.innerHTML = `
+        <div class="drawer-section">
+          <h4>Recurring Detection Math</h4>
+          <div class="drawer-row"><span>Occurrences</span><span>${sanitize(item.occurrences)} transactions</span></div>
+          <div class="drawer-row"><span>Average Interval</span><span>${sanitize(item.avg_interval)} days</span></div>
+          <div class="drawer-row"><span>Amount Variation (CV)</span><span>${sanitize(item.amount_variation_pct)}%</span></div>
+          <div class="drawer-row"><span>Pattern Confidence</span><span>${sanitize(item.recurring_confidence)}%</span></div>
+        </div>
+
+        ${comparisonHtml}
+
+        ${rep.cheaper_options && rep.cheaper_options.length > 0 ? `
+          <div class="drawer-section">
+            <h4>Alternative Listed Tiers</h4>
+            ${rep.cheaper_options.map(t => `
+              <div class="drawer-row">
+               <span>
+  ${sanitize(t[0])}
+  ${t[3] ? ' - may require eligibility verification' : ''}
+</span>
+<span>
+  ${fmtMoney(t[1], item.user_currency)}
+  (Diff: ${fmtMoney(t[2], item.user_currency)})
+</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <div class="drawer-section">
+          <h4>Evidence Source</h4>
+          <div class="source-box">${sanitize(item.evidence_note)}</div>
+        </div>
+      `;
+
+      document.getElementById('drawerTitle').innerText = `${item.merchant} Evidence`;
+      document.getElementById('drawerOverlay').style.display = 'block';
+      document.getElementById('evidenceDrawer').classList.add('open');
+    }
+    function closeDrawer() {
+      document.getElementById('drawerOverlay').style.display = 'none';
+      document.getElementById('evidenceDrawer').classList.remove('open');
+    }
+  </script>
+</body>
+</html>

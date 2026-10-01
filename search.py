@@ -12,8 +12,8 @@ USE_REPLAY = os.getenv("STATEMENTIQ_REPLAY", "1") == "1"
 DEMO_MODE = os.getenv("STATEMENTIQ_DEMO", "0") == "1"
 
 def build_query(service: str) -> str:
-    # Zero private user data leaked
-    return f"{service} subscription plans India monthly price official"
+    # Explicitly asking for plans/tiers prompts Google to return the full tier breakdown
+    return f"{service} all subscription plans pricing India monthly tiers official"
 
 def _trim(data: dict) -> Tuple[str, Optional[str]]:
     parts = []
@@ -24,11 +24,12 @@ def _trim(data: dict) -> Tuple[str, Optional[str]]:
         parts.append(f"Direct Answer: {text}")
         url = box.get("link")
         
-    for item in data.get("organic_results", [])[:3]:
+    # Read up to 6 organic results so all tiers (Mobile, Basic, Standard, Premium) are captured
+    for item in data.get("organic_results", [])[:6]:
         url = url or item.get("link")
         parts.append(f"{item.get('title', '')} | {item.get('snippet', '')}")
         
-    return "\n".join(parts)[:900], url
+    return "\n".join(parts)[:1600], url  # Raised ceiling slightly to fit all tiers
 
 def fetch_pricing_evidence(service: str):
     """Returns (query, snippets, source_url, status)."""
@@ -51,7 +52,7 @@ def fetch_pricing_evidence(service: str):
         "q": query,
         "gl": "in",
         "hl": "en",
-        "num": 4,
+        "num": 8,  # Request 8 results so lower organic positions with full tables get included
         "api_key": SERPAPI_KEY
     }
 
