@@ -84,7 +84,7 @@ Instead, after local merchant resolution, the external search is based on the ca
 
 This privacy boundary is also covered by an automated privacy test rather than being only a documentation claim.
 
-🧠 AI Safety Boundary
+## 🧠 AI Safety Boundary
 
 ChargeLens deliberately separates AI extraction from the final decision.
 
@@ -164,7 +164,7 @@ Price extracted
 
 so that an unavailable result does not imply that a search was never attempted.
 
-📄 Statement Input
+## 📄 Statement Input
 
 ChargeLens supports three statement-processing paths.
 
@@ -207,7 +207,7 @@ Canonical transaction DataFrame
 
 OCR accuracy depends on the scan quality, layout, fonts, and statement format.
 
-🔎 Recurring Charge Detection
+## 🔎 Recurring Charge Detection
 
 Recurring charges are detected locally before any external search is considered.
 
@@ -234,7 +234,7 @@ The recurring confidence score combines:
 
 The current charge used for spend calculations and market comparison is the most recently observed amount, rather than a historical average.
 
-📈 Historical Charge Change Detection
+## 📈 Historical Charge Change Detection
 
 ChargeLens separately tracks changes observed in recurring transaction amounts.
 
@@ -271,7 +271,7 @@ Current market-price comparison
 
 The historical amounts remain visible separately as evidence.
 
-🌐 SerpApi Integration
+## 🌐 SerpApi Integration
 
 ChargeLens uses SerpApi to retrieve current public search results through Google Search.
 
@@ -301,7 +301,7 @@ Audit logging
 
 This prevents every recurring transaction from automatically consuming a paid search.
 
-💰 SerpApi Budget Protection
+## 💰 SerpApi Budget Protection
 
 The default configuration is:
 
@@ -323,7 +323,7 @@ The dashboard also displays live usage, for example:
 
 SerpApi Used: 3 / 250
 Reserve: 50
-♻️ Replay Mode
+## ♻️ Replay Mode
 
 ChargeLens supports replay mode for deterministic demos and development.
 
@@ -341,7 +341,7 @@ for normal live-search operation.
 
 Replay mode does not bypass the pricing extraction or deterministic validation pipeline.
 
-🛡️ Validation States
+## 🛡️ Validation States
 
 ChargeLens does not force a comparison when evidence is insufficient.
 
@@ -383,7 +383,7 @@ SEARCH_THROTTLED
 
 A search was required, but the budget guard prevented the external request.
 
-🖥️ Dashboard
+## 🖥️ Dashboard
 
 The dashboard presents the analysis pipeline and evidence in one view.
 
@@ -440,7 +440,7 @@ Evidence source
 Retrieval timestamp
 Extraction model
 Validation method
-📊 Example
+## 📊 Example
 
 Suppose a bank statement contains:
 
@@ -472,7 +472,7 @@ sufficient confidence.
 
 If valid pricing evidence is available and the user's charge matches a listed plan, the dashboard can instead show a validated plan comparison and any potentially cheaper listed tiers, with eligibility caveats where applicable.
 
-🏗️ Architecture
+## 🏗️ Architecture
                     ┌──────────────────────┐
                     │    Bank Statement    │
                     │    CSV / PDF / OCR   │
@@ -523,7 +523,7 @@ If valid pricing evidence is available and the user's charge matches a listed pl
                                    │
                                    ▼
                       Dashboard + Evidence
-🧩 Project Structure
+## 🧩 Project Structure
 ChargeLens/
 │
 ├── app.py
@@ -557,7 +557,7 @@ ChargeLens/
 ├── .gitignore
 ├── LICENSE
 └── README.md
-🧰 Tech Stack
+## 🧰 Tech Stack
 Backend
 Python
 FastAPI
@@ -584,7 +584,7 @@ CSS
 JavaScript
 Testing
 Pytest
-🛠️ Setup
+## 🛠️ Setup
 1. Clone the repository
 git clone https://github.com/saloni-mishra/ChargeLens
 cd ChargeLens
@@ -597,7 +597,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 3. Install dependencies
 python -m pip install -r requirements.txt
-🧾 OCR Setup
+## 🧾 OCR Setup
 
 ChargeLens uses Tesseract for OCR fallback.
 
@@ -621,7 +621,7 @@ sudo apt install tesseract-ocr
 
 OCR results can vary depending on statement layout and image quality.
 
-🔑 Environment Variables
+## 🔑 Environment Variables
 
 Create a local .env file.
 
@@ -645,7 +645,7 @@ For the public repository, use:
 
 with empty API-key values.
 
-▶️ Run the Application
+## ▶️ Run the Application
 
 Start the FastAPI application with:
 
@@ -653,7 +653,7 @@ python -m uvicorn app:app --reload
 
 Then open the local dashboard in your browser.
 
-🧪 Run Tests
+## 🧪 Run Tests
 
 Run the complete test suite with:
 
@@ -672,7 +672,7 @@ Pricing validation behavior
 
 The privacy tests specifically verify that sensitive transaction information is not included in external search queries.
 
-🔒 Security and Privacy Notes
+## 🔒 Security and Privacy Notes
 
 The following information should never be included in external search requests:
 
@@ -697,7 +697,7 @@ private search/replay data
 
 The repository .gitignore is configured to exclude local environment files, the SQLite database, Python cache files, and replay data.
 
-⚠️ Limitations
+## ⚠️ Limitations
 
 ChargeLens is a hackathon prototype and has several known limitations.
 
@@ -763,7 +763,7 @@ does not automatically mean:
 
 The application intentionally leaves the cause unresolved unless separate evidence establishes it.
 
-🤖 AI Usage
+## 🤖 AI Usage
 
 ChargeLens uses Google Gemini (gemini-2.5-flash) to extract structured pricing information from SerpApi search evidence.
 
@@ -781,7 +781,7 @@ The final user-facing comparison is determined by deterministic Python validatio
 
 During development, Gemini and ChatGPT were also used for implementation assistance, debugging, documentation, and code review.
 
-🏆 Hackathon Context
+## 🏆 Hackathon Context
 
 ChargeLens was built for the:
 
@@ -815,12 +815,12 @@ The core principle is:
 
 Keep private financial data local. Use the public web only for public pricing evidence.
 
-📜 License
+## 📜 License
 
 This project is released under the MIT License.
 
 See LICENSE for the full license text.
 
-👤 Author
+## 👤 Author
 
 Built for the SerpApi India Hackathon 2026.
