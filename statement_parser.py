@@ -17,7 +17,7 @@ REQUIRED_COLUMNS = {
 
 def parse_csv(source: str | Path | BinaryIO) -> pd.DataFrame:
     """
-    Parse a StatementIQ CSV statement into the canonical transaction format.
+    Parse a ChargeLens CSV statement into the canonical transaction format.
 
     Expected columns:
         date, amount, currency, raw_description
@@ -200,7 +200,7 @@ def _table_to_rows(table: list[list[str | None]]) -> list[dict]:
     Convert a PDF table into transaction dictionaries.
 
     This supports tables whose header contains the expected
-    StatementIQ fields.
+    ChargeLens fields.
     """
     if not table:
         return []
@@ -266,7 +266,7 @@ def _table_to_rows(table: list[list[str | None]]) -> list[dict]:
 
 def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Normalize parser output without changing StatementIQ's
+    Normalize parser output without changing ChargeLens's
     existing downstream architecture.
     """
     df = df.copy()

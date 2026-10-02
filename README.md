@@ -1,8 +1,8 @@
-# StatementIQ
+# ChargeLens
 
 **Privacy-first bank statement analyzer for recurring charges and price checks.**
 
-StatementIQ parses bank statements (CSV, structured PDF, or OCR fallback for scanned PDFs) entirely on-device, detects recurring charges, identifies the underlying subscription service, and checks current public pricing through SerpApi — sending only a canonical service name, never raw statement data. Gemini proposes structured price candidates from search results, but a deterministic Python validator makes the final decision about what the user sees, and shows `UNAVAILABLE` rather than guessing when evidence is insufficient.
+ChargeLens parses bank statements (CSV, structured PDF, or OCR fallback for scanned PDFs) entirely on-device, detects recurring charges, identifies the underlying subscription service, and checks current public pricing through SerpApi — sending only a canonical service name, never raw statement data. Gemini proposes structured price candidates from search results, but a deterministic Python validator makes the final decision about what the user sees, and shows `UNAVAILABLE` rather than guessing when evidence is insufficient.
 
 > Built for the **SerpApi India Hackathon 2026**. Track: **Commerce & Market Intelligence**.
 
@@ -10,7 +10,7 @@ The key design goal is simple:
 
 > Keep private financial data local. Use the web only for public pricing information.
 
-## 🚀 What StatementIQ Does
+## 🚀 What ChargeLens Does
 
 - Parse CSV bank statements
 - Parse structured/text-based PDF statements
@@ -29,7 +29,7 @@ The key design goal is simple:
 
 ## 🔐 Privacy-First Architecture
 
-StatementIQ is designed around a strict privacy boundary.
+ChargeLens is designed around a strict privacy boundary.
 
 ### What stays local
 
@@ -47,11 +47,11 @@ StatementIQ is designed around a strict privacy boundary.
 
 Only a canonical merchant/service name is sent to SerpApi. For example: `Netflix`, `Spotify`, `YouTube Premium`.
 
-StatementIQ does **not** send `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, or `2026-04-05, ₹649, UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, to the external search service. The external search query is based solely on the canonical service identity and public pricing intent.
+ChargeLens does **not** send `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, or `2026-04-05, ₹649, UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, to the external search service. The external search query is based solely on the canonical service identity and public pricing intent.
 
 ## 🧠 AI Safety Boundary
 
-StatementIQ uses Gemini as a proposal/extraction layer, not as the final decision-maker.
+ChargeLens uses Gemini as a proposal/extraction layer, not as the final decision-maker.
 
 ```
 Bank Statement
@@ -108,17 +108,17 @@ The Python validator then checks:
 - Required fields
 - Search/evidence availability
 
-If the data cannot be safely validated, StatementIQ shows `UNAVAILABLE` rather than guessing.
+If the data cannot be safely validated, ChargeLens shows `UNAVAILABLE` rather than guessing.
 
 ## 📄 Statement Input
 
-StatementIQ supports three input paths.
+ChargeLens supports three input paths.
 
 **CSV** — files must provide these canonical fields: `date`, `amount`, `currency`, `raw_description`.
 
-**Structured PDF** — StatementIQ first attempts to extract transaction tables from PDFs using `pdfplumber`.
+**Structured PDF** — ChargeLens first attempts to extract transaction tables from PDFs using `pdfplumber`.
 
-**Image-based PDF / OCR** — if no transaction table can be extracted, StatementIQ falls back to:
+**Image-based PDF / OCR** — if no transaction table can be extracted, ChargeLens falls back to:
 
 ```
 PDF → PyMuPDF rendering → Tesseract OCR → OCR transaction parsing → Canonical transaction DataFrame
@@ -140,7 +140,7 @@ is identified as a recurring charge based on interval regularity and amount stab
 
 ## 🌐 SerpApi Integration
 
-StatementIQ uses SerpApi to retrieve current public search results via Google Search, with India-focused parameters (`gl=in`, `hl=en`). Example search intent:
+ChargeLens uses SerpApi to retrieve current public search results via Google Search, with India-focused parameters (`gl=in`, `hl=en`). Example search intent:
 
 ```
 "<service> subscription plans India monthly price official"
@@ -169,16 +169,16 @@ The application checks cache and budget availability before making a SerpApi req
 
 ## ♻️ Replay Mode
 
-For deterministic demos and development, StatementIQ supports replay mode:
+For deterministic demos and development, ChargeLens supports replay mode:
 
 ```
-STATEMENTIQ_REPLAY=1   # reuse previously captured search responses
-STATEMENTIQ_REPLAY=0   # normal operation — live SerpApi calls
+ChargeLens_REPLAY=1   # reuse previously captured search responses
+ChargeLens_REPLAY=0   # normal operation — live SerpApi calls
 ```
 
 ## 🛡️ Validation States
 
-StatementIQ does not force a price comparison when evidence is insufficient. Validation states include:
+ChargeLens does not force a price comparison when evidence is insufficient. Validation states include:
 
 - `MATCHES_LISTED_PLAN`
 - `NO_LISTED_MATCH`
@@ -187,11 +187,11 @@ StatementIQ does not force a price comparison when evidence is insufficient. Val
 - `IDENTITY_UNVERIFIED`
 - `SEARCH_THROTTLED`
 
-For example, if a merchant cannot be confidently identified locally, StatementIQ returns `IDENTITY_UNVERIFIED` and **no external search is made** — protecting both privacy and the SerpApi budget.
+For example, if a merchant cannot be confidently identified locally, ChargeLens returns `IDENTITY_UNVERIFIED` and **no external search is made** — protecting both privacy and the SerpApi budget.
 
 ## 📊 Example
 
-A recurring statement entry containing `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm` is locally resolved to `Netflix`. StatementIQ then searches public pricing for `"Netflix subscription plans India monthly price official"` — the original transaction description is never sent to SerpApi.
+A recurring statement entry containing `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm` is locally resolved to `Netflix`. ChargeLens then searches public pricing for `"Netflix subscription plans India monthly price official"` — the original transaction description is never sent to SerpApi.
 
 The dashboard shows results like:
 
@@ -201,7 +201,7 @@ Nearest listed plan: Basic — ₹199/month
 Your charge does not match any current listed price
 ```
 
-If a valid price cannot be established, StatementIQ instead displays `UNAVAILABLE` with the specific reason (e.g. identity unverified, no price found, or search throttled).
+If a valid price cannot be established, ChargeLens instead displays `UNAVAILABLE` with the specific reason (e.g. identity unverified, no price found, or search throttled).
 
 ## 🏗️ Architecture
 
@@ -261,7 +261,7 @@ If a valid price cannot be established, StatementIQ instead displays `UNAVAILABL
 ## 🧩 Project Structure
 
 ```
-StatementIQ/
+ChargeLens/
 │
 ├── app.py
 ├── statement_parser.py
@@ -310,7 +310,7 @@ StatementIQ/
 
 ```bash
 git clone <your-public-github-repository>
-cd StatementIQ
+cd ChargeLens
 ```
 
 ### 2. Create a virtual environment
@@ -335,7 +335,7 @@ python -m pip install -r requirements.txt
 
 ## 🧾 OCR Setup
 
-StatementIQ uses Tesseract for OCR fallback. Install the Tesseract OCR engine separately for your platform, then verify with:
+ChargeLens uses Tesseract for OCR fallback. Install the Tesseract OCR engine separately for your platform, then verify with:
 
 ```bash
 tesseract --version
@@ -357,8 +357,8 @@ GEMINI_MODEL=gemini-2.5-flash
 SERPAPI_TOTAL_BUDGET=250
 SERPAPI_DEMO_RESERVE=50
 
-STATEMENTIQ_REPLAY=0
-STATEMENTIQ_DEMO=0
+ChargeLens_REPLAY=0
+ChargeLens_DEMO=0
 ```
 
 Use `.env.example` (with empty values) for the public repository.
@@ -383,17 +383,17 @@ Current test coverage includes CSV parsing, PDF table parsing, PDF OCR fallback,
 
 The following should never be included in external search requests: account numbers, card numbers, transaction amounts, transaction dates, raw bank descriptions, UPI IDs, personal identifiers. Only the canonical service identity is used for external pricing searches.
 
-Users should also avoid committing: `.env`, `statementiq.db`, personal bank statements, OCR output containing private information, or SerpApi replay data containing sensitive information.
+Users should also avoid committing: `.env`, `ChargeLens.db`, personal bank statements, OCR output containing private information, or SerpApi replay data containing sensitive information.
 
 ## ⚠️ Limitations
 
-StatementIQ is a hackathon prototype with several known limitations:
+ChargeLens is a hackathon prototype with several known limitations:
 
 **Merchant identification** — some merchants may not be confidently identifiable from a transaction description. These are marked `IDENTITY_UNVERIFIED` rather than guessed.
 
 **OCR** — accuracy depends on PDF resolution, scan quality, fonts, and table layout. The current OCR parser targets common transaction layouts and is not guaranteed to support every bank statement format.
 
-**Public pricing** — prices can change, and search results may reflect regional restrictions, promotional pricing, student/family plans, or annual plans. StatementIQ uses validation gates before presenting any comparison rather than assuming pricing is current or applicable.
+**Public pricing** — prices can change, and search results may reflect regional restrictions, promotional pricing, student/family plans, or annual plans. ChargeLens uses validation gates before presenting any comparison rather than assuming pricing is current or applicable.
 
 **Search availability** — SerpApi searches are budget-controlled. If the budget is unavailable, the result is `SEARCH_THROTTLED`.
 
@@ -401,7 +401,7 @@ StatementIQ is a hackathon prototype with several known limitations:
 
 ## 🤖 AI Usage
 
-StatementIQ uses **Google Gemini (`gemini-2.5-flash`)** for structured information extraction from public search results. Gemini is intentionally restricted to a proposal role: its output is grounded against the raw search text before use, and the final displayed result is determined entirely by deterministic Python validation logic, not the model.
+ChargeLens uses **Google Gemini (`gemini-2.5-flash`)** for structured information extraction from public search results. Gemini is intentionally restricted to a proposal role: its output is grounded against the raw search text before use, and the final displayed result is determined entirely by deterministic Python validation logic, not the model.
 
 During development, **Gemini** and **Chatgpt** were used for implementation assistance, debugging, documentation, and code review.
 

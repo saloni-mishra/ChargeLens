@@ -15,7 +15,7 @@ from slice_runner import get_evidence, SEARCHABLE
 from validator import validate_comparison
 import budget
 
-app = FastAPI(title="StatementIQ Core API")
+app = FastAPI(title="ChargeLens Core API")
 
 # Initialize database tables on startup
 init_db()
