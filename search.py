@@ -4,11 +4,14 @@ import hashlib
 import requests
 from pathlib import Path
 from typing import Optional, Tuple
+from dotenv import load_dotenv
 from budget import check_budget_permission, record_search_success, log_audit_event
+
+load_dotenv()
 
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 REPLAY_DIR = Path("serp_replay")
-USE_REPLAY = os.getenv("ChargeLens_REPLAY", "1") == "1"
+USE_REPLAY = os.getenv("ChargeLens_REPLAY", "0") == "1"
 DEMO_MODE = os.getenv("ChargeLens_DEMO", "0") == "1"
 
 def build_query(service: str) -> str:
