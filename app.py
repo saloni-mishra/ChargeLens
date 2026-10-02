@@ -62,10 +62,16 @@ async def analyze_statement(file: UploadFile = File(...)):
     # 2. Local recurring charge detection
     candidates = analyze_recurring_patterns(df)
     results = []
-
     # 3. Market price verification stage
     for item in candidates:
         m = item["merchant"]
+        price_change = {
+    "detected": item.get("price_change_detected", False),
+    "changes": item.get("price_changes", []),
+    "amount_history": item.get("amount_history", []),
+}
+
+        item["price_change"] = price_change
         
         # Branch 1: Unresolved locally -> Search intentionally skipped to guard quota
         if source_by_merchant.get(m) not in SEARCHABLE:
@@ -86,7 +92,7 @@ async def analyze_statement(file: UploadFile = File(...)):
             continue
 
         # Branch 2: Search attempted but throttled or network issue
-        extracted, note = get_evidence(m)
+        extracted, note, provenance = get_evidence(m)
         if extracted is None:
             item["report"] = {
                 "confidence_tier": "UNAVAILABLE",
@@ -98,9 +104,12 @@ async def analyze_statement(file: UploadFile = File(...)):
                 "cadence_match": False,
                 "matched_plan": None,
                 "potential_difference": None,
-                "cheaper_options": []
+                "cheaper_options": [],
+                "search_performed": True,
+                "price_extracted": False
             }
             item["evidence_note"] = f"Search Guard Notice: {note}"
+            item["provenance"] = provenance
             results.append(item)
             continue
 
@@ -122,9 +131,12 @@ async def analyze_statement(file: UploadFile = File(...)):
             "cadence_match": report.cadence_match,
             "matched_plan": report.matched_plan,
             "potential_difference": report.potential_difference,
-            "cheaper_options": report.cheaper_options
+            "cheaper_options": report.cheaper_options,
+            "search_performed": report.search_performed,
+           "price_extracted": report.price_extracted
         }
         item["evidence_note"] = note
+        item["provenance"] = provenance
         results.append(item)
 
     return {"results": results}

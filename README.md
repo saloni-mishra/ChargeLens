@@ -1,59 +1,93 @@
 # ChargeLens
 
-**Privacy-first bank statement analyzer for recurring charges and price checks.**
+**Privacy-first recurring charge discovery & market evidence validation.**
 
-ChargeLens parses bank statements (CSV, structured PDF, or OCR fallback for scanned PDFs) entirely on-device, detects recurring charges, identifies the underlying subscription service, and checks current public pricing through SerpApi — sending only a canonical service name, never raw statement data. Gemini proposes structured price candidates from search results, but a deterministic Python validator makes the final decision about what the user sees, and shows `UNAVAILABLE` rather than guessing when evidence is insufficient.
+ChargeLens analyzes bank statements locally to detect recurring charges, identify subscription services, track observed charge changes over time, and compare current public pricing using SerpApi.
 
-> Built for the **SerpApi India Hackathon 2026**. Track: **Commerce & Market Intelligence**.
+Only a **canonical service name** such as `Netflix`, `Spotify`, or `YouTube Premium` is sent to the external search service. Raw transaction descriptions, dates, amounts, and account information stay local.
 
-The key design goal is simple:
+Gemini is used only as a **price-extraction/proposal layer**. A deterministic Python validator makes the final decision about what is shown to the user. When evidence is insufficient, ChargeLens reports `UNAVAILABLE` rather than guessing.
 
-> Keep private financial data local. Use the web only for public pricing information.
+> Built for the **SerpApi India Hackathon 2026**  
+> Track: **Commerce & Market Intelligence**
+
+---
 
 ## 🚀 What ChargeLens Does
 
 - Parse CSV bank statements
 - Parse structured/text-based PDF statements
-- Fall back to OCR for image-based PDFs
-- Detect recurring charges locally
+- Fall back to OCR for scanned/image-based PDFs
+- Detect recurring monthly charges locally
+- Measure recurrence confidence using interval regularity and amount stability
 - Normalize merchant names locally
-- Identify potentially searchable subscription/services
-- Search current public pricing using SerpApi
-- Extract candidate prices using Gemini
-- Validate extracted prices deterministically
-- Compare the user's recurring payment with listed plans
-- Show evidence and confidence
-- Track SerpApi usage and enforce a search budget
-- Cache search results to avoid unnecessary API calls
-- Keep sensitive transaction information out of external search requests
+- Resolve known subscription/service identities locally
+- Prevent unverified merchants from triggering external searches
+- Detect observed historical charge transitions such as `₹199 → ₹249 → ₹299`
+- Clearly distinguish observed statement changes from confirmed merchant price changes
+- Search current public pricing through SerpApi
+- Extract candidate pricing information using Gemini
+- Ground proposed prices against the actual search-result text
+- Validate pricing deterministically using Python
+- Check currency and billing cadence
+- Match charges against listed subscription plans
+- Surface potentially cheaper listed tiers
+- Flag eligibility-restricted tiers such as student or senior plans
+- Show evidence and provenance for each comparison
+- Estimate monthly and annual recurring spend
+- Track SerpApi usage
+- Enforce a SerpApi search budget
+- Cache pricing evidence to avoid unnecessary searches
+- Keep sensitive financial transaction data out of external search requests
+
+---
 
 ## 🔐 Privacy-First Architecture
 
 ChargeLens is designed around a strict privacy boundary.
 
-### What stays local
+### Data that stays local
+
+The following information is processed locally and is not sent to SerpApi:
 
 - Transaction dates
 - Transaction amounts
 - Currency
 - Raw transaction descriptions
 - Account/card references appearing in descriptions
+- UPI IDs
 - Transaction history
 - Merchant normalization
 - Recurring-charge detection
+- Historical charge-change analysis
 - Spending calculations
 
-### What can leave the application
+### Data that can leave the application
 
-Only a canonical merchant/service name is sent to SerpApi. For example: `Netflix`, `Spotify`, `YouTube Premium`.
+Only a canonical service identity is used for external pricing searches.
 
-ChargeLens does **not** send `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, or `2026-04-05, ₹649, UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm`, to the external search service. The external search query is based solely on the canonical service identity and public pricing intent.
+For example:
 
-## 🧠 AI Safety Boundary
+```text
+Netflix
+Spotify
+YouTube Premium
+The application does not send a raw transaction such as:
 
-ChargeLens uses Gemini as a proposal/extraction layer, not as the final decision-maker.
+UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
 
-```
+or:
+
+2026-04-05, ₹649, UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
+
+Instead, after local merchant resolution, the external search is based on the canonical service name and public pricing intent.
+
+This privacy boundary is also covered by an automated privacy test rather than being only a documentation claim.
+
+🧠 AI Safety Boundary
+
+ChargeLens deliberately separates AI extraction from the final decision.
+
 Bank Statement
       │
       ▼
@@ -65,10 +99,13 @@ Merchant Normalization
       ▼
 Recurring Charge Detection
       │
-      ▼
-Canonical Service Name
+      ├── Historical charge-change detection
       │
-      ├─────────────── Local/private data stays here
+      ▼
+Canonical Service Identity
+      │
+      │
+      ├──────── Private financial data stays local
       │
       ▼
 SerpApi Public Search
@@ -79,188 +116,414 @@ Search Results
       ▼
 Gemini Price Proposal
       │
+      │  grounded against source text
       ▼
 Deterministic Python Validator
       │
       ▼
-User-visible Result
-```
+User-visible Result + Evidence
+Gemini's role
 
-Gemini may propose something like:
+Gemini proposes structured pricing information from the retrieved search evidence.
 
-```
+For example:
+
 Plan: Premium
-Price: ₹299/month
+Price: ₹299
 Currency: INR
 Cadence: monthly
 Eligibility: student
-```
 
-But Gemini cannot directly decide that the result is valid. Before a proposal ever reaches the validator, each proposed price is **grounded against the raw search snippets** — any price the model proposes that doesn't literally appear in the source text is discarded, so the LLM can propose but can never fabricate.
+However, Gemini does not decide whether the result is valid.
 
-The Python validator then checks:
+Before a proposed price reaches the validator, ChargeLens checks that the proposed price is grounded in the retrieved search-result text. A price that cannot be grounded in the source text is discarded.
 
-- Price validity
-- Currency
-- Billing cadence
-- Plan matching
-- Eligibility restrictions
-- Required fields
-- Search/evidence availability
+Deterministic validation
 
-If the data cannot be safely validated, ChargeLens shows `UNAVAILABLE` rather than guessing.
+The Python validator checks:
 
-## 📄 Statement Input
+Required fields
+Price validity
+Currency
+Billing cadence
+Plan matching
+Eligibility restrictions
+Search/evidence availability
+Whether a listed plan actually matches the user's recurring charge
 
-ChargeLens supports three input paths.
+If the evidence cannot be safely validated, ChargeLens reports:
 
-**CSV** — files must provide these canonical fields: `date`, `amount`, `currency`, `raw_description`.
+UNAVAILABLE
 
-**Structured PDF** — ChargeLens first attempts to extract transaction tables from PDFs using `pdfplumber`.
+rather than inventing or assuming a price.
 
-**Image-based PDF / OCR** — if no transaction table can be extracted, ChargeLens falls back to:
+The UI also distinguishes between:
 
-```
-PDF → PyMuPDF rendering → Tesseract OCR → OCR transaction parsing → Canonical transaction DataFrame
-```
+Search performed
+Price extracted
 
-OCR accuracy can vary depending on the layout and quality of the bank statement.
+so that an unavailable result does not imply that a search was never attempted.
 
-## 🔎 Recurring Charge Detection
+📄 Statement Input
 
-Recurring transactions are detected locally, before any external search is considered. For example:
+ChargeLens supports three statement-processing paths.
 
-```
+CSV
+
+CSV files must provide these canonical fields:
+
+date
+amount
+currency
+raw_description
+
+Example:
+
+date,amount,currency,raw_description
+2026-04-05,299,INR,UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
+2026-05-05,299,INR,UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
+2026-06-05,299,INR,UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
+Structured PDF
+
+ChargeLens first attempts to extract transaction tables from text-based PDFs using pdfplumber.
+
+Image-based PDF / OCR
+
+If a transaction table cannot be extracted, ChargeLens can fall back to OCR:
+
+PDF
+ │
+ ▼
+PyMuPDF rendering
+ │
+ ▼
+Tesseract OCR
+ │
+ ▼
+OCR transaction parsing
+ │
+ ▼
+Canonical transaction DataFrame
+
+OCR accuracy depends on the scan quality, layout, fonts, and statement format.
+
+🔎 Recurring Charge Detection
+
+Recurring charges are detected locally before any external search is considered.
+
+The detector uses:
+
+Billing interval regularity
+Amount stability
+Monthly cadence
+
+A repeated merchant name alone is not sufficient.
+
+For example:
+
 Netflix   ₹649   Apr
 Netflix   ₹649   May
 Netflix   ₹649   Jun
-```
 
-is identified as a recurring charge based on interval regularity and amount stability, not just a repeated name.
+can be identified as a recurring monthly charge.
 
-## 🌐 SerpApi Integration
+The recurring confidence score combines:
 
-ChargeLens uses SerpApi to retrieve current public search results via Google Search, with India-focused parameters (`gl=in`, `hl=en`). Example search intent:
+60% interval regularity
+40% amount stability
 
-```
-"<service> subscription plans India monthly price official"
-```
+The current charge used for spend calculations and market comparison is the most recently observed amount, rather than a historical average.
 
-The application does not send raw transaction descriptions to SerpApi.
+📈 Historical Charge Change Detection
 
-**Search controls:**
-- Disk caching
-- Search budget limits
-- Budget reserve for demonstrations
-- Cache freshness controls
-- Search throttling
-- Audit information
+ChargeLens separately tracks changes observed in recurring transaction amounts.
 
-This prevents every transaction from automatically triggering a paid external search.
+For example:
 
-## 💰 SerpApi Budget Protection
+₹199 → ₹199 → ₹249 → ₹249 → ₹299
 
-```
+produces observed transitions such as:
+
+₹199 → ₹249   +₹50 (+25.1%)
+₹249 → ₹299   +₹50 (+20.1%)
+
+These changes are based only on the transaction history in the statement.
+
+Important distinction
+
+ChargeLens does not claim that an observed amount change was caused by an official merchant price increase.
+
+The change could instead reflect:
+
+A plan upgrade
+Added services
+Taxes
+A billing adjustment
+Another transaction-level change
+
+Therefore the dashboard explicitly describes these as observed charge changes, not confirmed merchant price changes.
+
+The latest observed charge is used for:
+
+Monthly recurring spend
+Annualized recurring spend
+Current market-price comparison
+
+The historical amounts remain visible separately as evidence.
+
+🌐 SerpApi Integration
+
+ChargeLens uses SerpApi to retrieve current public search results through Google Search.
+
+Searches use India-focused parameters:
+
+gl=in
+hl=en
+
+The pricing search intent is based on the canonical service name.
+
+For example:
+
+Netflix subscription plans India monthly price official
+
+The original bank transaction description is never included in the search query.
+
+Search controls
+
+ChargeLens uses:
+
+Disk caching
+Search budget limits
+Demonstration reserve
+Cache freshness controls
+Search throttling
+Audit logging
+
+This prevents every recurring transaction from automatically consuming a paid search.
+
+💰 SerpApi Budget Protection
+
+The default configuration is:
+
 SERPAPI_TOTAL_BUDGET=250
 SERPAPI_DEMO_RESERVE=50
-```
 
-The application checks cache and budget availability before making a SerpApi request. If a search cannot be performed because of the budget, the UI reports `SEARCH_THROTTLED` rather than silently skipping or retrying.
+Before making a live search, ChargeLens checks:
 
-## ♻️ Replay Mode
+Whether valid cached evidence already exists
+Whether the SerpApi budget permits another search
 
-For deterministic demos and development, ChargeLens supports replay mode:
+If the search cannot be performed because of budget restrictions, the application reports:
 
-```
-ChargeLens_REPLAY=1   # reuse previously captured search responses
-ChargeLens_REPLAY=0   # normal operation — live SerpApi calls
-```
+SEARCH_THROTTLED
 
-## 🛡️ Validation States
+instead of silently retrying or pretending that pricing evidence was checked.
 
-ChargeLens does not force a price comparison when evidence is insufficient. Validation states include:
+The dashboard also displays live usage, for example:
 
-- `MATCHES_LISTED_PLAN`
-- `NO_LISTED_MATCH`
-- `NO_PRICE_FOUND`
-- `GATE_MISMATCH`
-- `IDENTITY_UNVERIFIED`
-- `SEARCH_THROTTLED`
+SerpApi Used: 3 / 250
+Reserve: 50
+♻️ Replay Mode
 
-For example, if a merchant cannot be confidently identified locally, ChargeLens returns `IDENTITY_UNVERIFIED` and **no external search is made** — protecting both privacy and the SerpApi budget.
+ChargeLens supports replay mode for deterministic demos and development.
 
-## 📊 Example
+Replay mode reuses previously captured SerpApi responses instead of making a new live search.
 
-A recurring statement entry containing `UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm` is locally resolved to `Netflix`. ChargeLens then searches public pricing for `"Netflix subscription plans India monthly price official"` — the original transaction description is never sent to SerpApi.
+The environment variable used by the current application is:
 
-The dashboard shows results like:
+ChargeLens_REPLAY=1
 
-```
-Netflix — ₹649/month — Confidence: MEDIUM
-Nearest listed plan: Basic — ₹199/month
-Your charge does not match any current listed price
-```
+for replay mode, or:
 
-If a valid price cannot be established, ChargeLens instead displays `UNAVAILABLE` with the specific reason (e.g. identity unverified, no price found, or search throttled).
+ChargeLens_REPLAY=0
 
-## 🏗️ Architecture
+for normal live-search operation.
 
-```
+Replay mode does not bypass the pricing extraction or deterministic validation pipeline.
+
+🛡️ Validation States
+
+ChargeLens does not force a comparison when evidence is insufficient.
+
+Possible validation states include:
+
+MATCHES_LISTED_PLAN
+NO_LISTED_MATCH
+NO_PRICE_FOUND
+GATE_MISMATCH
+IDENTITY_UNVERIFIED
+SEARCH_THROTTLED
+MATCHES_LISTED_PLAN
+
+The user's current charge matches a validated listed plan.
+
+NO_LISTED_MATCH
+
+Pricing evidence was extracted, but the user's charge does not match a currently listed plan.
+
+NO_PRICE_FOUND
+
+A search was performed, but no pricing information could be extracted and validated with sufficient confidence.
+
+GATE_MISMATCH
+
+Evidence exists, but one or more required comparison conditions do not match, such as currency or billing cadence.
+
+IDENTITY_UNVERIFIED
+
+The merchant could not be confidently resolved to a known service locally.
+
+In this case:
+
+No external search is made.
+
+This protects both user privacy and the SerpApi budget.
+
+SEARCH_THROTTLED
+
+A search was required, but the budget guard prevented the external request.
+
+🖥️ Dashboard
+
+The dashboard presents the analysis pipeline and evidence in one view.
+
+Summary metrics
+
+The dashboard shows:
+
+Recurring charges detected
+Monthly recurring spend
+Annualized recurring spend
+Unconfirmed price gap
+
+The monthly and annual spend figures use the most recently observed recurring charge.
+
+Potential differences from an unconfirmed plan are excluded from verified savings.
+
+"How ChargeLens Decides"
+
+The dashboard visually presents the five-step decision pipeline:
+
+1. Parse locally
+2. Detect recurrence
+3. Resolve service
+4. Gather evidence
+5. Validate
+
+This makes the privacy and validation architecture visible rather than leaving it only in documentation.
+
+Merchant cards
+
+Each recurring merchant card shows:
+
+Service name
+Current monthly charge
+Confidence tier
+Plain-English result summary
+Evidence drawer
+
+Each merchant can expose detailed evidence including:
+
+Recurring detection information
+Billing cadence
+Amount stability
+Search status
+Price extraction status
+Historical charge transitions
+Market-price validation gates
+Matched plan
+Potential difference
+Cheaper listed tiers
+Eligibility caveats
+Search query
+Evidence source
+Retrieval timestamp
+Extraction model
+Validation method
+📊 Example
+
+Suppose a bank statement contains:
+
+UPI-NETFLIX.COM*9812-MUMBAI-paytm@paytm
+
+ChargeLens processes the description locally and resolves it to:
+
+Netflix
+
+The external pricing search is then based on:
+
+Netflix subscription plans India monthly price official
+
+The raw transaction description and transaction amount are not included in the external search.
+
+A result could appear as:
+
+Netflix — ₹299/month — UNAVAILABLE
+
+Historical charge change:
+₹199 → ₹249 → ₹299
+
+Search performed: Yes
+Price extracted: No
+
+Public pricing was searched, but no subscription
+price could be extracted and validated with
+sufficient confidence.
+
+If valid pricing evidence is available and the user's charge matches a listed plan, the dashboard can instead show a validated plan comparison and any potentially cheaper listed tiers, with eligibility caveats where applicable.
+
+🏗️ Architecture
                     ┌──────────────────────┐
-                    │   Bank Statement      │
-                    │   CSV / PDF / OCR     │
+                    │    Bank Statement    │
+                    │    CSV / PDF / OCR   │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │   Local Parser        │
-                    │ CSV / PDF / OCR       │
+                    │    Local Parser      │
+                    │    CSV / PDF / OCR   │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │ Merchant Normalizer   │
+                    │ Merchant Normalizer  │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │ Recurring Detector    │
+                    │ Recurring Detector   │
+                    │ + Charge Changes     │
                     └──────────┬───────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │ Canonical Service     │
-                    │ Identity              │
+                    │ Canonical Service    │
+                    │ Identity             │
                     └──────────┬───────────┘
                                │
-                       Searchable?
-                        /        \
-                      No          Yes
-                      │            │
-                      ▼            ▼
-               IDENTITY_      Cache / Budget
-               UNVERIFIED          │
+                        Searchable?
+                         /       \
+                       No         Yes
+                       │           │
+                       ▼           ▼
+                IDENTITY_     Cache / Budget
+                UNVERIFIED         │
                                    ▼
-                               SerpApi
+                                SerpApi
                                    │
                                    ▼
-                           Search Results
+                             Search Results
                                    │
                                    ▼
-                               Gemini
-                        (Price Proposal Only —
-                         grounded against source text)
+                                Gemini
+                          Price Proposal Only
                                    │
                                    ▼
-                      Deterministic Validator
+                       Deterministic Validator
                                    │
                                    ▼
-                           Dashboard Result
-```
-
-## 🧩 Project Structure
-
-```
+                      Dashboard + Evidence
+🧩 Project Structure
 ChargeLens/
 │
 ├── app.py
@@ -287,69 +550,83 @@ ChargeLens/
 │   ├── test_parser_csv.py
 │   ├── test_parser_pdf.py
 │   ├── test_ocr_fallback.py
-│   └── test_privacy.py      # asserts SerpApi queries contain no amounts, dates, or raw statement text
+│   └── test_privacy.py
 │
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
+├── LICENSE
 └── README.md
-```
+🧰 Tech Stack
+Backend
+Python
+FastAPI
+Uvicorn
+Pandas
+NumPy
+Statement processing
+pdfplumber
+PyMuPDF
+pytesseract
+Pillow
+AI
+Google Gemini
+gemini-2.5-flash
 
-## ⚙️ Tech Stack
+Gemini is used for structured pricing extraction only. The final comparison decision is made by deterministic Python validation.
 
-**Backend:** Python, FastAPI, Uvicorn, Pandas, NumPy
-**Statement Processing:** pdfplumber, PyMuPDF, pytesseract, Pillow
-**AI:** Google Gemini (`gemini-2.5-flash`) — structured extraction only, output grounded against source text, final decision made deterministically
-**Search:** SerpApi (Google Search engine)
-**Frontend:** HTML, CSS, JavaScript
-**Testing:** Pytest
-
-## 🛠️ Setup
-
-### 1. Clone the repository
-
-```bash
-git clone <your-public-github-repository>
+Search
+SerpApi
+Google Search engine
+Frontend
+HTML
+CSS
+JavaScript
+Testing
+Pytest
+🛠️ Setup
+1. Clone the repository
+git clone https://github.com/saloni-mishra/ChargeLens
 cd ChargeLens
-```
-
-### 2. Create a virtual environment
-
-**Windows:**
-```bash
+2. Create a virtual environment
+Windows
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
-```
-
-**macOS / Linux:**
-```bash
+macOS / Linux
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
+3. Install dependencies
 python -m pip install -r requirements.txt
-```
+🧾 OCR Setup
 
-## 🧾 OCR Setup
+ChargeLens uses Tesseract for OCR fallback.
 
-ChargeLens uses Tesseract for OCR fallback. Install the Tesseract OCR engine separately for your platform, then verify with:
+Install the Tesseract OCR engine separately for your operating system.
 
-```bash
+Verify the installation with:
+
 tesseract --version
-```
+Windows
 
-**Windows** default path: `C:\Program Files\Tesseract-OCR\tesseract.exe` — update the path in the parser configuration if your installation differs.
-**macOS:** `brew install tesseract`
-**Linux (Debian/Ubuntu):** `sudo apt install tesseract-ocr`
+A common installation path is:
 
-## 🔑 Environment Variables
+C:\Program Files\Tesseract-OCR\tesseract.exe
 
-Create a local `.env` file (never commit this):
+If Tesseract is installed elsewhere, update the parser configuration accordingly.
 
-```
+macOS
+brew install tesseract
+Debian / Ubuntu
+sudo apt install tesseract-ocr
+
+OCR results can vary depending on statement layout and image quality.
+
+🔑 Environment Variables
+
+Create a local .env file.
+
+Do not commit this file.
+
 SERPAPI_KEY=your_serpapi_key
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.5-flash
@@ -359,60 +636,191 @@ SERPAPI_DEMO_RESERVE=50
 
 ChargeLens_REPLAY=0
 ChargeLens_DEMO=0
-```
 
-Use `.env.example` (with empty values) for the public repository.
+The variable names above match the names currently read by the application.
 
-## ▶️ Run the Application
+For the public repository, use:
 
-```bash
+.env.example
+
+with empty API-key values.
+
+▶️ Run the Application
+
+Start the FastAPI application with:
+
 python -m uvicorn app:app --reload
-```
 
 Then open the local dashboard in your browser.
 
-## 🧪 Run Tests
+🧪 Run Tests
 
-```bash
+Run the complete test suite with:
+
 python -m pytest -q
-```
 
-Current test coverage includes CSV parsing, PDF table parsing, PDF OCR fallback, and an automated privacy check confirming no financial data reaches the external search query.
+The test suite covers areas including:
 
-## 🔒 Security and Privacy Notes
+CSV parsing
+Structured PDF parsing
+OCR fallback
+Privacy boundary checks
+Recurring charge detection
+Historical charge transitions
+Latest-charge handling
+Pricing validation behavior
 
-The following should never be included in external search requests: account numbers, card numbers, transaction amounts, transaction dates, raw bank descriptions, UPI IDs, personal identifiers. Only the canonical service identity is used for external pricing searches.
+The privacy tests specifically verify that sensitive transaction information is not included in external search queries.
 
-Users should also avoid committing: `.env`, `ChargeLens.db`, personal bank statements, OCR output containing private information, or SerpApi replay data containing sensitive information.
+🔒 Security and Privacy Notes
 
-## ⚠️ Limitations
+The following information should never be included in external search requests:
 
-ChargeLens is a hackathon prototype with several known limitations:
+Account numbers
+Card numbers
+Transaction amounts
+Transaction dates
+Raw bank descriptions
+UPI IDs
+Personal identifiers
+Other private transaction metadata
 
-**Merchant identification** — some merchants may not be confidently identifiable from a transaction description. These are marked `IDENTITY_UNVERIFIED` rather than guessed.
+Only the canonical service identity is used for external pricing searches.
 
-**OCR** — accuracy depends on PDF resolution, scan quality, fonts, and table layout. The current OCR parser targets common transaction layouts and is not guaranteed to support every bank statement format.
+Do not commit:
 
-**Public pricing** — prices can change, and search results may reflect regional restrictions, promotional pricing, student/family plans, or annual plans. ChargeLens uses validation gates before presenting any comparison rather than assuming pricing is current or applicable.
+.env
+ChargeLens.db
+personal bank statements
+OCR output containing private information
+private search/replay data
 
-**Search availability** — SerpApi searches are budget-controlled. If the budget is unavailable, the result is `SEARCH_THROTTLED`.
+The repository .gitignore is configured to exclude local environment files, the SQLite database, Python cache files, and replay data.
 
-**Detection scope** — only monthly-cadence recurring charges are reliably detected from a single statement period; annual subscriptions appearing once per year may not be identified.
+⚠️ Limitations
 
-## 🤖 AI Usage
+ChargeLens is a hackathon prototype and has several known limitations.
 
-ChargeLens uses **Google Gemini (`gemini-2.5-flash`)** for structured information extraction from public search results. Gemini is intentionally restricted to a proposal role: its output is grounded against the raw search text before use, and the final displayed result is determined entirely by deterministic Python validation logic, not the model.
+Merchant identification
 
-During development, **Gemini** and **Chatgpt** were used for implementation assistance, debugging, documentation, and code review.
+Some merchants cannot be confidently mapped to a known service. These are reported as:
 
-## 🏆 Hackathon Context
+IDENTITY_UNVERIFIED
 
-Built for the **SerpApi India Hackathon 2026**, Commerce & Market Intelligence track. The project demonstrates a privacy-conscious workflow where private financial data stays local, only a canonical service identity reaches the public web, and every user-facing claim passes through deterministic validation before display — never an AI guess alone.
+rather than guessed.
 
-## 📜 License
+OCR
 
-This project is released under the MIT License. See `LICENSE` for the full license text.
+OCR accuracy depends on:
 
-## 👤 Author
+PDF resolution
+Scan quality
+Fonts
+Table layout
+Statement format
+
+The current OCR parser targets common transaction layouts and is not guaranteed to support every bank statement format.
+
+Public pricing
+
+Public prices can change and search results can contain:
+
+Regional restrictions
+Promotional pricing
+Student plans
+Family plans
+Annual plans
+Other eligibility conditions
+
+ChargeLens uses validation gates before presenting comparisons and explicitly flags eligibility-restricted tiers.
+
+Search availability
+
+SerpApi searches are budget-controlled.
+
+When the budget guard prevents a search, the result is:
+
+SEARCH_THROTTLED
+Detection scope
+
+The current recurring detector focuses on monthly recurring charges that appear repeatedly within the available statement history.
+
+Annual subscriptions that appear only once per year may not be identified.
+
+Historical charge changes
+
+ChargeLens reports observed transitions in recurring transaction amounts.
+
+It does not attempt to determine the cause of those changes.
+
+For example:
+
+₹199 → ₹249
+
+does not automatically mean:
+
+"the merchant increased its official price"
+
+The application intentionally leaves the cause unresolved unless separate evidence establishes it.
+
+🤖 AI Usage
+
+ChargeLens uses Google Gemini (gemini-2.5-flash) to extract structured pricing information from SerpApi search evidence.
+
+The extracted structure can contain:
+
+Plan
+Price
+Currency
+Billing period
+Eligibility
+
+Gemini's output is grounded against the retrieved search text before being used.
+
+The final user-facing comparison is determined by deterministic Python validation rather than by the model's judgment.
+
+During development, Gemini and ChatGPT were also used for implementation assistance, debugging, documentation, and code review.
+
+🏆 Hackathon Context
+
+ChargeLens was built for the:
+
+SerpApi India Hackathon 2026
+
+Track: Commerce & Market Intelligence
+
+The project demonstrates a privacy-conscious market-intelligence workflow:
+
+Private financial data
+        │
+        ▼
+Local analysis
+        │
+        ▼
+Canonical service identity
+        │
+        ▼
+Public market evidence
+        │
+        ▼
+AI-assisted extraction
+        │
+        ▼
+Deterministic validation
+        │
+        ▼
+Evidence-backed result
+
+The core principle is:
+
+Keep private financial data local. Use the public web only for public pricing evidence.
+
+📜 License
+
+This project is released under the MIT License.
+
+See LICENSE for the full license text.
+
+👤 Author
 
 Built for the SerpApi India Hackathon 2026.

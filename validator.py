@@ -30,7 +30,8 @@ class ValidationReport:
     cheaper_options: List[
         Tuple[str, float, float, Optional[str]]
     ] = field(default_factory=list)
-
+    search_performed: bool = False
+    price_extracted: bool = False
 
 def validate_comparison(
     user_amount: float,
@@ -52,6 +53,8 @@ def validate_comparison(
             currency_match=False,
             cadence_checked=False,
             cadence_match=False,
+            search_performed=True,
+            price_extracted=False,
         )
 
     # 2. Gate check: Currency and Cadence
@@ -80,6 +83,8 @@ def validate_comparison(
                 p.billing_period == user_cadence
                 for p in extracted.plans
             ),
+            search_performed=True,
+            price_extracted=True,
         )
 
     # 3. Plan Matching
@@ -118,6 +123,8 @@ def validate_comparison(
             matched_plan=nearest.tier,
             potential_difference=0.0,
             cheaper_options=cheaper,
+            search_performed=True,
+            price_extracted=True,
         )
 
     return ValidationReport(
@@ -135,4 +142,6 @@ def validate_comparison(
         matched_plan=None,
         potential_difference=round(user_amount - nearest.price, 2),
         cheaper_options=cheaper,
+        search_performed=True,
+        price_extracted=True,
     )
